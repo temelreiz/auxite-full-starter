@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark temel */
+:root { color-scheme: dark; }
+body { @apply bg-aux-bg text-neutral-100; }
+
+/* Tek tip kart ve buton stilleri */
+.a-card { @apply rounded-2xl bg-aux-card border border-neutral-800 shadow-soft; }
+.a-btn  { @apply px-3 py-2 rounded-xl border border-neutral-700 hover:bg-neutral-800 transition; }
+
+/* Başlık yardımcıları */
+.h1 { @apply text-2xl font-semibold tracking-tight; }
+.h2 { @apply text-xl font-semibold; }
+
+/* Vurgu renk kısayolları */
+.text-gold   { color: theme(colors.aux.gold); }
+.text-silver { color: theme(colors.aux.silver); }
+.bg-accent   { background-color: theme(colors.aux.accent); }
