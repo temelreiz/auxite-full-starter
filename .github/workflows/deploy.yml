@@ -1,0 +1,77 @@
+name: Deploy Wallet (S3+CF)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: eu-central-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build export
+        run: |
+          rm -rf .next out
+          pnpm build
+          test -d out || { echo "❌ out klasörü oluşmadı!"; exit 1; }
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          audience: sts.amazonaws.com
+
+      - name: Find bucket (fallback)
+        id: detect
+        env:
+          FALLBACK_BUCKET: wallet.auxite.io   # kendi S3 bucket adını buraya yaz
+        run: |
+          set -euo pipefail
+          echo "BUCKET=${FALLBACK_BUCKET}" >> "$GITHUB_OUTPUT"
+          echo "DIST_ID=" >> "$GITHUB_OUTPUT"
+
+      - name: Sync static assets
+        run: |
+          aws s3 sync ./out "s3://${{ steps.detect.outputs.BUCKET }}" \
+            --delete --region eu-central-1 \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "*.html" --exclude "index.txt"
+
+      - name: Sync HTML files
+        run: |
+          aws s3 sync ./out "s3://${{ steps.detect.outputs.BUCKET }}" \
+            --delete --region eu-central-1 \
+            --content-type "text/html; charset=utf-8" \
+            --cache-control "public,max-age=60" \
+            --exclude "*" --include "*.html"
+
+      - name: Invalidate CloudFront cache (optional)
+        if: ${{ steps.detect.outputs.DIST_ID != '' }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.detect.outputs.DIST_ID }}" \
+            --paths "/*" >/dev/null
+
+      - name: Who am I
+        run: aws sts get-caller-identity
+
