@@ -1,47 +1,69 @@
-// src/components/PriceCards.tsx
-"use client";
-import { fmt2, type PriceItem, type Metal } from "@/lib/prices";
-import { usePrices } from "@/hooks/usePrices";
+'use client';
 
-export default function PriceCards() {
-  const { data, isLoading, error, wsStatus, lastUpdated, history } = usePrices();
+import { usePriceFeed } from '@/lib/usePriceFeed';
 
-  if (error) return <div className="p-4 rounded-xl bg-red-50 text-red-700">Price feed error</div>;
-  if (isLoading || !data) return <div className="p-4">Loading prices…</div>;
+export function PriceCards() {
+  const { prices, error, connected } = usePriceFeed();
 
-  const badge =
-    wsStatus === "open" ? (
-      <span className="px-2 py-0.5 rounded text-xs bg-green-500/15 text-green-700">WS Live</span>
-    ) : (
-      <span className="px-2 py-0.5 rounded text-xs bg-amber-500/15 text-amber-700">HTTP Polling</span>
+  // Eğer ciddi bir hata varsa ama hiç data yoksa: küçük uyarı kutusu
+  if (error && !prices.length) {
+    return (
+      <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs">
+        Price feed temporarily unavailable. Your funds are safe; on-chain
+        data is always the source of truth.
+      </div>
     );
+  }
 
+  // Henüz data yok: skeleton
+  if (!prices.length) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-16 rounded-xl bg-neutral-900/80 border border-neutral-800 animate-pulse"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Data var: kartları göster
   return (
-    <section className="px-5 py-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-xl font-semibold">Auxite Metal Prices</h2>
-        {badge}
-        <span className="text-xs text-neutral-500">
-          {lastUpdated ? new Date(lastUpdated).toLocaleTimeString("tr-TR") : ""}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {data.map((p: PriceItem) => {
-          const key = p.symbol as Metal;                 // <-- türü garanti et
-          const series = (history[key] ?? []).slice(-80); // son 80 nokta
-          return (
-            <article key={p.symbol} className="rounded-xl border border-neutral-200 p-4">
-              <div className="text-sm text-neutral-500">{p.symbol}</div>
-              <div className="text-2xl font-semibold mt-1">{fmt2(p.price)}</div>
-              <div className="text-[11px] text-neutral-400 mt-1">
-                {p.ts ? new Date(p.ts as any).toLocaleTimeString("tr-TR") : ""}
-              </div>
-              {/* İstersen burada series ile küçük sparkline çizersin */}
-            </article>
-          );
-        })}
-      </div>
-    </section>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {prices.map((p) => (
+        <div
+          key={p.id}
+          className="rounded-xl bg-neutral-950/80 border border-neutral-800 px-3 py-2.5 flex flex-col gap-1"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xs font-semibold text-neutral-100">
+                {p.symbol}
+              </span>
+              {p.chain && (
+                <span className="text-[9px] text-neutral-500">
+                  {p.chain}
+                </span>
+              )}
+            </div>
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                connected ? 'bg-emerald-400' : 'bg-yellow-400'
+              }`}
+            />
+          </div>
+          <div className="text-sm font-mono tabular-nums text-neutral-100">
+            {p.price.toFixed(6)}
+          </div>
+          <div className="text-[9px] text-neutral-500">
+            {p.updatedAt
+              ? `Updated ${new Date(p.updatedAt).toLocaleTimeString()}`
+              : 'Live from Auxite watcher'}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
