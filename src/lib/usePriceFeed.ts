@@ -17,14 +17,52 @@ const WS_URL =
   'wss://api.auxite.io/ws/prices';
 
 /**
- * Gelen raw WebSocket mesajını standart Price[] listesine çevirir.
- * Burayı gerçek payload formatına göre kolayca uyarlayabiliriz.
+ * Gelen raw WebSocket mesajını standart Price[] listesine çevir.
+ * Şu formatı destekliyoruz:
+ *
+ *  { type: "prices", data: [ { symbol, chain?, price, updatedAt? }, ... ] }
  */
 function normalize(msg: RawMsg): Price[] | null {
   if (!msg) return null;
 
-  // Örnek 1:
-  // { "type": "price", "symbol": "AUXG", "chain": "base-sepolia", "price": 78.12, "updatedAt": "..." }
+  // Yeni gerçek format: { type: "prices", data: [...] }
+  if (msg.type === 'prices' && Array.isArray(msg.data)) {
+    return msg.data
+      .map((p: any) => {
+        // Sembole esnek yaklaş: symbol / token / metal
+        const symbol = p.symbol || p.token || p.metal;
+        // Fiyat: price / usd / value tarzı alanlardan biri
+        const price =
+          typeof p.price === 'number'
+            ? p.price
+            : typeof p.usd === 'number'
+            ? p.usd
+            : typeof p.value === 'number'
+            ? p.value
+            : null;
+
+        if (!symbol || price === null) return null;
+
+        const chain = p.chain || p.network || p.net || undefined;
+        const updatedAt =
+          typeof p.updatedAt === 'string'
+            ? p.updatedAt
+            : p.ts
+            ? new Date(p.ts).toISOString()
+            : undefined;
+
+        return {
+          id: `${symbol}-${chain || 'main'}`,
+          symbol,
+          chain,
+          price,
+          updatedAt,
+        } as Price;
+      })
+      .filter((x: Price | null) => !!x) as Price[];
+  }
+
+  // Eski olası formatları da yedekte tutalım:
   if (msg.type === 'price' && msg.symbol && typeof msg.price === 'number') {
     return [
       {
@@ -37,13 +75,9 @@ function normalize(msg: RawMsg): Price[] | null {
     ];
   }
 
-  // Örnek 2:
-  // { "prices": [ { "symbol": "AUXG", "chain": "base", "price": 78.12 }, ... ] }
   if (Array.isArray(msg.prices)) {
     return msg.prices
-      .filter(
-        (p: any) => p && p.symbol && typeof p.price === 'number',
-      )
+      .filter((p: any) => p && p.symbol && typeof p.price === 'number')
       .map((p: any) => ({
         id: `${p.symbol}-${p.chain || 'main'}`,
         symbol: p.symbol,
@@ -53,7 +87,6 @@ function normalize(msg: RawMsg): Price[] | null {
       }));
   }
 
-  // Başka format geliyorsa şimdilik yok sayıyoruz
   return null;
 }
 
@@ -111,7 +144,6 @@ export function usePriceFeed() {
           if (!alive) return;
           setConnected(true);
           setError(null);
-          // console.debug('[Auxite] price feed connected:', WS_URL);
         };
 
         ws.onclose = () => {
@@ -132,7 +164,6 @@ export function usePriceFeed() {
           try {
             const data = JSON.parse(event.data as string);
             // Debug: gerçek payload'u görmek için
-            // Prod’da rahatsız ederse yorum satırı yaparız.
             // eslint-disable-next-line no-console
             console.debug('[Auxite] price feed message:', data);
 
