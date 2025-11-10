@@ -11,15 +11,16 @@ export const LiveMarkets: React.FC = () => {
     .map((sym) => prices[sym])
     .filter(Boolean);
 
-  const fmtTime = (ts?: number | null) => {
-    if (!ts) return "—";
-    const d = new Date(ts);
-    return d.toLocaleTimeString("tr-TR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  };
+  const fmtTime = (ts?: number | Date | null) => {
+  if (!ts) return "—";
+  const d = ts instanceof Date ? ts : new Date(ts);
+  return d.toLocaleTimeString("tr-TR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
 
   return (
     <div
