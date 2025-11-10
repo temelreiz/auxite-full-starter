@@ -1,79 +1,95 @@
 "use client";
 
 import React from "react";
-import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { usePriceFeed } from "../hooks/usePriceFeed";
 
 export const LivePrices: React.FC = () => {
-  const { prices, connected, lastUpdate } = usePriceFeed();
-
-  const entries = Object.values(prices || {}).sort((a, b) =>
-    a.symbol.localeCompare(b.symbol)
-  );
-
-  console.log("[Auxite] entries", entries);
+  const { entries, connected, lastUpdate } = usePriceFeed();
 
   return (
-    <div className="w-full rounded-2xl border border-zinc-700 bg-zinc-900/90 px-6 py-5 shadow-md">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="text-sm font-bold text-white">
-            Live Markets 💹
-          </div>
-          <div className="text-[11px] text-zinc-400">
-            Real-time prices from Auxite watcher
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-1 text-[11px]">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                connected ? "bg-emerald-400" : "bg-red-500"
-              }`}
-            />
-            <span
-              className={connected ? "text-emerald-400" : "text-red-400"}
-            >
-              {connected ? "Live" : "Disconnected"}
+    <div className="w-full rounded-3xl border border-zinc-800 bg-zinc-900/90 px-6 py-4 shadow-xl">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Live Markets 🟢</h2>
+            <span className="text-[10px] text-zinc-500">
+              Real-time prices from Auxite watcher
             </span>
           </div>
-          <div className="text-[10px] text-zinc-500">
+        </div>
+        <div className="flex flex-col items-end text-[10px]">
+          <span
+            className={`flex items-center gap-1 ${
+              connected ? "text-emerald-400" : "text-red-400"
+            }`}
+          >
+            <span className="text-[9px]">●</span>
+            {connected ? "Live" : "Disconnected"}
+          </span>
+          <span className="text-zinc-500">
             {lastUpdate
-              ? `Last update: ${new Date(lastUpdate).toLocaleTimeString()}`
-              : "Waiting for prices..."}
-          </div>
+              ? `Last update: ${lastUpdate.toLocaleTimeString()}`
+              : "Waiting for feed..."}
+          </span>
         </div>
       </div>
 
-      {entries.length === 0 ? (
-        <div className="text-[12px] text-zinc-400">
-          Henüz fiyat verisi yok.
-        </div>
-      ) : (
-        <table className="w-full text-[13px] text-zinc-200">
-          <thead>
-            <tr className="text-zinc-400">
-              <th className="text-left pb-2">Token</th>
-              <th className="text-right pb-2">Price (USD)</th>
-              <th className="text-right pb-2">Time</th>
+      {/* Table */}
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full text-xs md:text-[11px]">
+          <thead className="text-zinc-500 border-b border-zinc-800/80">
+            <tr>
+              <th className="py-2 text-left font-normal">Token</th>
+              <th className="py-2 text-left font-normal hidden md:table-cell">
+                Chain
+              </th>
+              <th className="py-2 text-right font-normal">Price (USD)</th>
+              <th className="py-2 text-right font-normal hidden md:table-cell">
+                Time
+              </th>
             </tr>
           </thead>
           <tbody>
-            {entries.map((p) => (
-              <tr key={p.symbol} className="border-t border-zinc-800">
-                <td className="py-1 font-medium">{p.symbol}</td>
-                <td className="py-1 text-right">
-                  {Number(p.price).toLocaleString("en-US", {
-                    maximumFractionDigits: 3,
-                  })}
-                </td>
-                <td className="py-1 text-right text-zinc-500">
-                  {new Date(p.ts).toLocaleTimeString()}
+            {entries.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="py-4 text-center text-[11px] text-zinc-500"
+                >
+                  Henüz fiyat verisi yok. Watcher'dan ilk mesaj bekleniyor.
                 </td>
               </tr>
-            ))}
+            ) : (
+              entries.map((p) => (
+                <tr
+                  key={p.symbol}
+                  className="border-b border-zinc-900/60 last:border-0"
+                >
+                  <td className="py-2 font-medium text-zinc-100">
+                    {p.symbol}
+                  </td>
+                  <td className="py-2 text-zinc-500 hidden md:table-cell">
+                    —
+                  </td>
+                  <td className="py-2 text-right tabular-nums">
+                    {Number(p.price).toLocaleString("en-US", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 6,
+                    })}
+                  </td>
+                  <td className="py-2 text-right text-zinc-500 hidden md:table-cell tabular-nums">
+                    {p.timestamp
+                      ? new Date(p.timestamp).toLocaleTimeString()
+                      : lastUpdate
+                      ? lastUpdate.toLocaleTimeString()
+                      : "—"}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-      )}
+      </div>
     </div>
   );
 };

@@ -1,121 +1,96 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
-type RawPrice = {
+export interface PriceEntry {
   symbol: string;
   price: number;
-  ts?: number;
-};
+  timestamp?: string;
+}
 
-type Envelope =
-  | { type: "prices"; data: RawPrice[] }
-  | RawPrice[]
-  | RawPrice;
-
-type PriceEntry = {
-  symbol: string;
-  price: number;
-  ts: number;
-};
-
-type PriceMap = Record<string, PriceEntry>;
-
-const WS_URL =
-  process.env.NEXT_PUBLIC_AUXITE_WS_URL ||
-  "wss://api.auxite.io/ws/prices";
+interface FeedMessage {
+  type: string;
+  data?: any;
+}
 
 export function usePriceFeed() {
-  const [prices, setPrices] = useState<PriceMap>({});
+  const [prices, setPrices] = useState<Record<string, PriceEntry>>({});
   const [connected, setConnected] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
-
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const applyPrices = (list: RawPrice[]) => {
-      if (!list || list.length === 0) return;
-
-      setPrices((prev) => {
-        const next: PriceMap = { ...prev };
-        let maxTs = lastUpdate ?? 0;
-
-        for (const p of list) {
-          if (!p || !p.symbol) continue;
-          const ts = p.ts ?? Date.now();
-          next[p.symbol] = {
-            symbol: p.symbol,
-            price: Number(p.price),
-            ts,
-          };
-          if (ts > maxTs) maxTs = ts;
-        }
-
-        setLastUpdate(maxTs || Date.now());
-        return next;
-      });
-    };
-
-    const handleMessage = (ev: MessageEvent) => {
-      try {
-        const msg = JSON.parse(ev.data as string) as Envelope;
-        console.log("[Auxite] price feed message:", msg);
-
-        if (Array.isArray(msg)) {
-          applyPrices(msg);
-        } else if ("type" in msg && msg.type === "prices" && Array.isArray(msg.data)) {
-          applyPrices(msg.data);
-        } else if ("symbol" in msg) {
-          applyPrices([msg as RawPrice]);
-        }
-      } catch (err) {
-        console.error("[Auxite] failed to parse price message", err);
-      }
-    };
-
-    const connect = () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-
-      const ws = new WebSocket(WS_URL);
+    function connect() {
+      const ws = new WebSocket("wss://api.auxite.io/ws/prices");
       wsRef.current = ws;
 
       ws.onopen = () => {
         setConnected(true);
+        // console.log("[Auxite] ws connected");
       };
 
-      ws.onmessage = handleMessage;
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data) as FeedMessage;
 
-      ws.onerror = () => {
-        setConnected(false);
+          if (msg.type === "prices" && Array.isArray(msg.data)) {
+            const next: Record<string, PriceEntry> = {};
+            let maxTs = lastUpdate ? lastUpdate.getTime() : 0;
+
+            for (const item of msg.data) {
+              if (!item.symbol || item.price == null) continue;
+
+              const tsRaw = item.timestamp || item.ts || item.time;
+              const ts =
+                tsRaw && !Number.isNaN(Date.parse(tsRaw))
+                  ? new Date(tsRaw)
+                  : null;
+
+              if (ts && ts.getTime() > maxTs) {
+                maxTs = ts.getTime();
+              }
+
+              next[item.symbol] = {
+                symbol: item.symbol,
+                price: Number(item.price),
+                timestamp: ts ? ts.toISOString() : undefined,
+              };
+            }
+
+            setPrices(next);
+            if (maxTs > 0) setLastUpdate(new Date(maxTs));
+          }
+        } catch (err) {
+          console.error("[Auxite] price feed parse error", err);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error("[Auxite] ws error", err);
       };
 
       ws.onclose = () => {
         setConnected(false);
-        if (!reconnectRef.current) {
-          reconnectRef.current = setTimeout(() => {
-            reconnectRef.current = null;
+        // basit reconnect
+        setTimeout(() => {
+          if (wsRef.current === ws) {
             connect();
-          }, 3000);
-        }
+          }
+        }, 3000);
       };
-    };
+    }
 
     connect();
-
     return () => {
-      if (reconnectRef.current) clearTimeout(reconnectRef.current);
-      if (wsRef.current) {
-        wsRef.current.onclose = null;
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      wsRef.current?.close();
+      wsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { prices, connected, lastUpdate };
+  const entries = Object.values(prices).sort((a, b) =>
+    a.symbol.localeCompare(b.symbol)
+  );
+
+  return { prices, entries, connected, lastUpdate };
 }
