@@ -26,7 +26,6 @@ export function usePriceFeed() {
 
       ws.onopen = () => {
         setConnected(true);
-        // console.log("[Auxite] ws connected");
       };
 
       ws.onmessage = (event) => {
@@ -35,19 +34,19 @@ export function usePriceFeed() {
 
           if (msg.type === "prices" && Array.isArray(msg.data)) {
             const next: Record<string, PriceEntry> = {};
-            let maxTs = lastUpdate ? lastUpdate.getTime() : 0;
+            let maxTs = 0;
 
             for (const item of msg.data) {
               if (!item.symbol || item.price == null) continue;
 
               const tsRaw = item.timestamp || item.ts || item.time;
-              const ts =
-                tsRaw && !Number.isNaN(Date.parse(tsRaw))
-                  ? new Date(tsRaw)
-                  : null;
+              let ts: Date | null = null;
 
-              if (ts && ts.getTime() > maxTs) {
-                maxTs = ts.getTime();
+              if (tsRaw && !Number.isNaN(Date.parse(tsRaw))) {
+                ts = new Date(tsRaw);
+                if (ts.getTime() > maxTs) {
+                  maxTs = ts.getTime();
+                }
               }
 
               next[item.symbol] = {
@@ -58,7 +57,13 @@ export function usePriceFeed() {
             }
 
             setPrices(next);
-            if (maxTs > 0) setLastUpdate(new Date(maxTs));
+
+            // Eğer mesajda timestamp yoksa bile, en azından "şu an"ı lastUpdate yap.
+            if (maxTs > 0) {
+              setLastUpdate(new Date(maxTs));
+            } else {
+              setLastUpdate(new Date());
+            }
           }
         } catch (err) {
           console.error("[Auxite] price feed parse error", err);
@@ -81,11 +86,11 @@ export function usePriceFeed() {
     }
 
     connect();
+
     return () => {
       wsRef.current?.close();
       wsRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const entries = Object.values(prices).sort((a, b) =>
