@@ -24,17 +24,6 @@ app.use(bodyParser.json());
 
 const PORT = process.env.PORT || 3001;
 
-// ---------------------------
-// Live price store (in-memory)
-// ---------------------------
-
-/**
- * prices:
- * {
- *   AUXG: { symbol: "AUXG", price: 2475.32, ts: 1699999999999 },
- *   ...
- * }
- */
 let prices = {};
 let lastUpdate = null;
 
